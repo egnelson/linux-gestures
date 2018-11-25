@@ -1,0 +1,165 @@
+#! /usr/bin/python3.6
+
+import sys, subprocess as sp
+from functools import reduce
+
+def help(msg):
+    h='''
+winmgr.py (move|switch) (left|right)
+winmgr.py (min|down|up|fullscreen)
+  move: move the current window a desktop to the left or right
+  switch: switch desktop left or right
+  min: minimize the current window if not fullscreen
+  down: minimize if not maximized or fullscreen, unmaximize if not fullscreen, unfullscreen
+  up: fullscreen if maximized, maximize if not 
+  fullscreen: make fullscreen'''
+    print(msg, file=sys.stderr)
+    print(h, file=sys.stderr)
+
+def run(args, shell=True):
+    print(args, file=sys.stderr)
+    try:
+        out = (True, sp.check_output([args], shell=shell).decode('utf-8'))
+        print(out[1], file=sys.stderr)
+        return out
+    except sp.CalledProcessError as err:
+        return (False, err.returncode)
+
+def desk(): # -> (current desktop: int, last desktop: int)
+    (ok, output) = run('/usr/bin/wmctrl -d | /bin/grep \'\\*\' | /usr/bin/awk \'{ print $1 }\'')
+    if ok:
+        active = int(output)
+        (ok, output) = run('/usr/bin/wmctrl -d')
+        if ok:
+            return (active, max([ int(line.split(' ')[0]) for line in output.split('\n') if len(line) > 0 ]))
+    return None
+
+def w():
+    (ok, output) = run('/usr/bin/xdotool getactivewindow')
+    if ok:
+        return hex(int(output))
+    return None
+
+NORM = 0
+MAX = 1
+FS = 2
+MIN = 3
+RM_FS = 4
+def gstate(win):
+    MH_s = 'Maximized Horz'
+    MV_s = 'Maximized Vert'
+    FS_s = 'Fullscreen'
+    STATES = set([
+        MH_s,
+        MV_s,
+        FS_s
+    ])
+    (ok, output) = run(f'xwininfo -wm -id {win} | grep -A 100 \'Window state\'')
+    if ok:
+        lines = set([ l.strip() for l in output.split('\n') if len(l) > 0 and l.strip() in STATES ])
+        state = 0
+        if FS_s in lines:
+            state = FS
+        elif MH_s in lines and MV_s in lines:
+            state = MAX
+        return state
+    return None
+
+def move(win, desk):
+    (ok, _) = run(f'/usr/bin/wmctrl -r :ACTIVE: -t {desk}')
+    return ok
+
+def switch(desk):
+    (ok, _) = run(f'/usr/bin/wmctrl -s {desk}')
+    return ok
+
+def size(win, ns):
+    st = gstate(win)
+    ok = st is not None
+
+    if ok and st != ns:
+        if ns == MAX: # rm fullscreen, on max
+            ok = run(f'/usr/bin/wmctrl -r :ACTIVE: -b add,maximized_vert,maximized_horz')[0] and run(f'/usr/bin/wmctrl -r :ACTIVE: -b remove,fullscreen')[0]
+        elif ns == FS: # on fullscreen
+            (ok, _) = run(f'/usr/bin/wmctrl -r :ACTIVE: -b add,fullscreen')
+        elif ns == MIN: # rm fullscreen, xdo min
+            ok = run(f'/usr/bin/wmctrl -r :ACTIVE: -b remove,fullscreen')[0] and run(f'/usr/bin/xdotool windowminimize {win}')[0]
+        elif ns == NORM: # rm fullscreen, rm max
+            ok = run(f'/usr/bin/wmctrl -r :ACTIVE: -b remove,maximized_vert,maximized_horz')[0] and run(f'/usr/bin/wmctrl -r :ACTIVE: -b remove,fullscreen')[0]
+        elif ns == RM_FS:
+            (ok, _) = run(f'/usr/bin/wmctrl -r :ACTIVE: -b remove,fullscreen')
+
+    return ok
+
+if __name__ == '__main__':
+    def get_action(cmd, st):
+        actions = {
+            'down': {
+                NORM: MIN,
+                MAX: NORM,
+                FS: RM_FS
+            },
+            'up': {
+                MAX: FS,
+                NORM: MAX
+            },
+            'min': {
+                NORM: MIN,
+                MAX: MIN
+            },
+            'fullscreen': {
+                NORM: FS,
+                MAX: FS
+            }
+        }
+        if cmd in actions.keys() and st in actions[cmd].keys():
+            return actions[cmd][st]
+        return None
+
+    if len(sys.argv) == 1:
+        print('feed me args')
+        sys.exit(1)
+    
+    cmd = sys.argv[1]
+
+    win = None
+    if cmd != 'switch':
+        win = w()
+        if win is None:
+            print("no active window", file=sys.stderr)
+            sys.exit(0)
+
+    ok = False
+    if cmd in ['move', 'switch']:
+        if len(sys.argv) != 3:
+            help('bad arg count')
+            sys.exit(1)
+
+        dir = sys.argv[2]
+        if dir not in ['left', 'right']:
+            help(f'bad arg {sys.argv[2]}')
+            sys.exit(1)
+        else:
+            (curr, max_d) = desk()
+            next = curr
+            if dir == 'left':
+                next = curr - 1
+                if curr == 0:
+                    next = -1
+            elif dir == 'right':
+                next = curr + 1
+                if curr == max_d:
+                    next = -1
+            print(next)
+            if next != -1:
+                if cmd == 'move':
+                    ok = move(win, next) and switch(next)
+                else:
+                    ok = switch(next)
+    elif cmd in ['down', 'up', 'min', 'fullscreen']:
+        act = get_action(cmd, gstate(win))
+        if act is not None:
+            ok = size(win, act)
+    else:
+        help(f'unknown cmd: {sys.argv[1]}')
+    print(ok)
