@@ -3,6 +3,8 @@
 import sys, subprocess as sp
 from functools import reduce
 
+logfile=open('/home/egnelson/winmgr.log', 'w')
+
 def help(msg):
     h='''
 winmgr.py (move|switch) (left|right)
@@ -13,14 +15,14 @@ winmgr.py (min|down|up|fullscreen)
   down: minimize if not maximized or fullscreen, unmaximize if not fullscreen, unfullscreen
   up: fullscreen if maximized, maximize if not 
   fullscreen: make fullscreen'''
-    print(msg, file=sys.stderr)
-    print(h, file=sys.stderr)
+    print(msg, file=logfile)
+    print(h, file=logfile)
 
 def run(args, shell=True):
-    print(args, file=sys.stderr)
+    print(args, file=logfile)
     try:
         out = (True, sp.check_output([args], shell=shell).decode('utf-8'))
-        print(out[1], file=sys.stderr)
+        print(out[1], file=logfile)
         return out
     except sp.CalledProcessError as err:
         return (False, err.returncode)
@@ -126,7 +128,7 @@ if __name__ == '__main__':
     if cmd != 'switch':
         win = w()
         if win is None:
-            print("no active window", file=sys.stderr)
+            print("no active window", file=logfile)
             sys.exit(0)
 
     ok = False

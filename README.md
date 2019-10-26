@@ -7,13 +7,37 @@ Gestures for Linux using libinput-gestures.
 
 - [libinput-gestures](https://github.com/bulletmark/libinput-gestures)
 
+OR
+
+- ruby
+
+- fusuma
+
 ## Installation
-libinput-gestures.conf goes in your $HOME/.config directory.
+
+install xdotool and wmctrl using your distro's package manager
 
 winmgr goes somewhere in your PATH.
 
+### using libinput-gestures
+
+libinput-gestures.conf goes in your $HOME/.config directory.
+
+### using fusuma
+
+$ gem install fusuma
+
+config.yml goes in $HOME/.config/fusuma
+
 ## Running
+
+### using libinput-gestures
+
 Add the 'libinput-gestures' executable to your desktop environment's startup applications. It should pick up your config automatically.
+
+### using fusuma
+
+Add 'fusuma -d' to your dektop environment's startup applications.
 
 ## winmgr
 winmgr takes a command- either 'up', 'down', 'fullscreen', 'move' or 'switch'- and an optional direction- 'left' or 'right'.
